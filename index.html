@@ -18,7 +18,7 @@
   .mute{ position:fixed; top:calc(12px + env(safe-area-inset-top,20px)); right:16px; z-index:31; width:36px; height:36px; border-radius:50%;
     border:1px solid rgba(255,255,255,.25); background:rgba(255,255,255,.1); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
     color:#fff; font-size:16px; cursor:pointer; }
-  .bottombar{ position:fixed; bottom:calc(16px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%);
+  .bottombar{ position:fixed; bottom:calc(env(safe-area-inset-bottom, 16px) + 20px); left:50%; transform:translateX(-50%);
     display:flex; align-items:center; gap:14px; padding:10px 16px; border-radius:999px; z-index:30;
     background:rgba(15,23,42,.55); border:1px solid rgba(122,208,255,.25); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
     box-shadow:0 8px 28px rgba(0,0,0,.45); }
@@ -32,7 +32,7 @@
     animation:breath 2.6s ease-in-out infinite; }
   @keyframes breath{ 0%,100%{ box-shadow:0 0 16px rgba(255,216,138,.25), inset 0 0 14px rgba(122,208,255,.12);} 50%{ box-shadow:0 0 30px rgba(255,216,138,.5), inset 0 0 20px rgba(122,208,255,.22);} }
   .btn.emit{ background:rgba(122,208,255,.25); border:1px solid rgba(122,208,255,.7); box-shadow:0 0 16px rgba(122,208,255,.4); }
-  #guideCard{ position:fixed; bottom:calc(104px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%) translateY(10px);
+  #guideCard{ position:fixed; bottom:calc(env(safe-area-inset-bottom, 16px) + 110px); left:50%; transform:translateX(-50%) translateY(10px);
     display:flex; align-items:center; gap:8px; padding:10px 18px; border-radius:999px;
     background:rgba(15,23,42,.7); border:1px solid rgba(255,216,138,.35); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
     color:#e6ecf8; font-size:13px; letter-spacing:1px; box-shadow:0 4px 20px rgba(0,0,0,.4); opacity:0; pointer-events:none;
@@ -74,7 +74,15 @@
     static circle(O,D,C,r){const rt=Raycaster.roots(O,D,C,r);if(!rt)return null;if(rt.near>=1e-4)return rt.near;if(rt.far>=1e-4)return rt.far;return null;}
     static tri(O,D,v){let mn=Infinity,mx=-Infinity,n=0;for(let i=0;i<3;i++){const t=Raycaster.seg(O,D,v[i],v[(i+1)%3]);if(t!==null){n++;if(t<mn)mn=t;if(t>mx)mx=t;}}if(n<2)return null;return{tEntry:mn,tExit:mx};}
     static cast(origin,dir,geo,maxBounce=8){
-      const SPLIT=20*Math.PI/180, MAX_RAYS=64; const rays=[], activated=new Set();
+      // 两遍投射：第一遍墙关闭确定感应器激活；第二遍激活的墙打开得到最终光路与判定
+      const p1=Raycaster.castOnce(origin,dir,geo,maxBounce,new Set());
+      const open=new Set(p1.gateHits);
+      const p2=Raycaster.castOnce(origin,dir,geo,maxBounce,open);
+      p2.gateHits=[...open];
+      return p2;
+    }
+    static castOnce(origin,dir,geo,maxBounce=8,openGates=new Set()){
+      const SPLIT=20*Math.PI/180, MAX_RAYS=64; const rays=[], activated=new Set(), gateHits=new Set();
       const trace=(O0,D0,c,budget)=>{
         if(rays.length>=MAX_RAYS)return null;
         let O=O0.clone(),D=D0.normalize();
@@ -87,6 +95,9 @@
           for(const cr of geo.crystals)cons(Raycaster.circle(O,D,cr.center,cr.radius),cr);
           for(const d of geo.dyes)cons(Raycaster.seg(O,D,d.a,d.b),d);
           for(const w of geo.wormholes)cons(Raycaster.circle(O,D,w.center,w.radius),w);
+          for(const l of geo.lenses)cons(Raycaster.circle(O,D,l.center,l.influence),l);
+          for(const s of geo.gateSensors)cons(Raycaster.circle(O,D,s.center,s.radius),s);
+          for(const w of geo.gateWalls)cons(Raycaster.seg(O,D,w.a,w.b),w);
           for(const p of geo.prisms){const r=Raycaster.tri(O,D,p.verts);if(r&&r.tEntry<bt){bt=r.tEntry;bo=p;ph=r;}}
           if(bo===null){node.segments.push({from:O,to:O.add(D.mul(2000))});node.terminal='exit';rays.push(node);return node;}
           const hit=O.add(D.mul(bt));node.segments.push({from:O,to:hit});
@@ -97,6 +108,9 @@
           if(bo.kind==='blackhole'){ node.hits.push({point:hit,kind:'blackhole'}); node.terminal='blackhole'; rays.push(node); return node; }
           if(bo.kind==='dye'){ c=c|bo.mask; node.hits.push({point:hit,kind:'dye'}); O=hit.add(D.mul(1e-3)); continue; }
           if(bo.kind==='wormhole'){ node.hits.push({point:hit,kind:'wormhole'}); if(budget<=0){node.terminal='max';rays.push(node);return node;} budget--; O=bo.partner.add(D.mul(bo.radius+1e-3)); continue; }
+          if(bo.kind==='lens'){ node.hits.push({point:hit,kind:'lens'}); if(budget<=0){node.terminal='max';rays.push(node);return node;} budget--; D=D.rotate(bo.bend); O=hit.add(D.mul(bo.influence*2+1e-3)); continue; }
+          if(bo.kind==='sensor'){ gateHits.add(bo.gateId); node.hits.push({point:hit,kind:'sensor'}); node.terminal='sensor'; rays.push(node); return node; }
+          if(bo.kind==='wall'){ if(openGates.has(bo.gateId)){ O=hit.add(D.mul(1e-3)); continue; } node.hits.push({point:hit,kind:'wall'}); node.terminal='wall'; rays.push(node); return node; }
           if(bo.kind==='mirror'){ node.hits.push({point:hit,kind:'mirror'}); if(budget<=0){node.terminal='max';rays.push(node);return node;} budget--; D=D.reflect(bo.normal); O=hit.add(D.mul(1e-3)); continue; }
           if(bo.kind==='prism'){ node.hits.push({point:hit,kind:'prism'}); node.terminal='prism';
             if(budget>0){ budget--; const exit=O.add(D.mul(ph.tExit)); for(const k of[-1,1]){ if(rays.length>=MAX_RAYS)break; const cd=D.rotate(k*SPLIT); const ch=trace(exit.add(cd.mul(1e-3)),cd,c,budget); if(ch)node.children.push(ch); } }
@@ -105,7 +119,7 @@
       };
       const root=trace(origin,dir,0,maxBounce);
       const solved=geo.crystals.length>0 && activated.size>=geo.crystals.length;
-      return {root,rays,activated:[...activated],solved};
+      return {root,rays,activated:[...activated],gateHits:[...gateHits],solved};
     }
   }
 
@@ -113,125 +127,46 @@
   const VV=[{a:{x:400,y:60},b:{x:400,y:540}},{a:{x:400,y:60},b:{x:400,y:540}}];
   const HV=[{a:{x:60,y:300},b:{x:740,y:300}},{a:{x:400,y:60},b:{x:400,y:540}}];
   const LEVELS=[
-    { id:1, name:"初识光影", tutorial:"emit", newFeature:"emit", theme:"#0e2440",
-      emitter:{x:200,y:300,angle:0}, foldAxis:VV, solution:{f1:false},
-      targets:[ {x:500,y:300,r:20,fold:0} ] },
-    { id:2, name:"空间对折", tutorial:"fold", newFeature:"fold", theme:"#10324a",
-      emitter:{x:200,y:300,angle:0}, foldAxis:VV, solution:{f1:true},
-      mirrors:[ {x:560,y:300,initialAngle:-135,half:42,fold:1,isLocked:true} ],
-      targets:[ {x:560,y:180,r:20,fold:1} ] },
-    { id:3, name:"镜面调校", tutorial:"rotate", newFeature:"rotate", theme:"#22315a",
-      emitter:{x:200,y:300,angle:0}, foldAxis:VV, solution:{f1:true},
-      mirrors:[ {x:560,y:300,initialAngle:0,half:42,fold:1,isLocked:false} ],
-      targets:[ {x:560,y:180,r:20,fold:1} ] },
-    { id:4, name:"双镜直角", theme:"#0f3a3e",
-      emitter:{x:150,y:300,angle:0}, foldAxis:VV, solution:{f1:true},
-      mirrors:[ {x:600,y:300,initialAngle:90,half:42,fold:1,isLocked:false}, {x:600,y:180,initialAngle:0,half:42,fold:1,isLocked:false} ],
-      targets:[ {x:520,y:180,r:20,fold:1} ] },
-    { id:5, name:"跨越黑洞", theme:"#3a2450",
-      emitter:{x:130,y:300,angle:0}, foldAxis:VV, solution:{f1:true},
-      blackHoles:[ {x:280,y:300,r:24,fold:0} ],
-      mirrors:[ {x:580,y:300,initialAngle:90,half:42,fold:1,isLocked:false}, {x:580,y:200,initialAngle:0,half:42,fold:1,isLocked:false} ],
-      targets:[ {x:500,y:200,r:20,fold:1} ] },
-    { id:6, name:"横向对折", theme:"#2c1e44",
-      emitter:{x:150,y:250,angle:0}, foldAxis:HV, solution:{f1:true},
-      mirrors:[ {x:300,y:350,initialAngle:0,half:42,fold:1,isLocked:false} ],
-      blackHoles:[ {x:350,y:250,r:26,fold:0} ],
-      targets:[ {x:300,y:450,r:20,fold:1} ] },
-    { id:7, name:"分光双目标", newFeature:"prism", theme:"#1c2e52",
-      emitter:{x:150,y:300,angle:0}, foldAxis:VV, solution:{f1:true},
-      prisms:[ {x:560,y:300,angle:-90,r:28,fold:1} ],
-      mirrors:[ {x:480,y:271,initialAngle:90,half:40,fold:1,isLocked:false}, {x:480,y:329,initialAngle:0,half:40,fold:1,isLocked:false} ],
-      targets:[ {x:420,y:221,r:17,fold:1}, {x:420,y:379,r:17,fold:1} ] },
-    { id:8, name:"折线迷宫", theme:"#352a5c",
-      emitter:{x:120,y:300,angle:0}, foldAxis:VV, solution:{f1:true},
-      mirrors:[ {x:590,y:300,initialAngle:90,half:42,fold:1,isLocked:false}, {x:590,y:180,initialAngle:0,half:42,fold:1,isLocked:false}, {x:470,y:180,initialAngle:0,half:42,fold:1,isLocked:false} ],
-      blackHoles:[ {x:280,y:300,r:24,fold:0} ],
-      targets:[ {x:470,y:270,r:24,fold:1} ] },
-    { id:9, name:"光影拓扑", theme:"#123844",
-      emitter:{x:90,y:300,angle:0}, foldAxis:VV, solution:{f1:true},
-      mirrors:[ {x:650,y:300,initialAngle:90,half:42,fold:1,isLocked:false}, {x:650,y:120,initialAngle:0,half:42,fold:1,isLocked:false}, {x:540,y:120,initialAngle:0,half:42,fold:1,isLocked:false}, {x:540,y:360,initialAngle:90,half:42,fold:1,isLocked:false} ],
-      blackHoles:[ {x:200,y:300,r:24,fold:0}, {x:300,y:300,r:24,fold:0} ],
-      targets:[ {x:410,y:360,r:24,fold:1} ] },
-    { id:10, name:"分光避洞", theme:"#3a2854",
-      emitter:{x:150,y:300,angle:0}, foldAxis:VV, solution:{f1:true},
-      prisms:[ {x:560,y:300,angle:-90,r:28,fold:1} ],
-      mirrors:[ {x:480,y:271,initialAngle:90,half:40,fold:1,isLocked:false}, {x:480,y:329,initialAngle:0,half:40,fold:1,isLocked:false} ],
-      targets:[ {x:420,y:221,r:17,fold:1}, {x:420,y:379,r:17,fold:1} ],
-      blackHoles:[ {x:330,y:300,r:20,fold:0} ] },
-    { id:11, name:"折叠次序", theme:"#1c3a44",
-      emitter:{x:150,y:300,angle:0}, foldAxis:VV, solution:{f1:true},
-      mirrors:[ {x:250,y:300,initialAngle:0,half:40,fold:0,isLocked:false}, {x:550,y:240,initialAngle:90,half:40,fold:1,isLocked:false} ],
-      targets:[ {x:520,y:240,r:18,fold:1} ] },
-    { id:12, name:"双镜调校", theme:"#342440",
-      emitter:{x:130,y:300,angle:0}, foldAxis:VV, solution:{f1:true},
-      blackHoles:[ {x:280,y:300,r:24,fold:0} ],
-      mirrors:[ {x:580,y:300,initialAngle:90,half:42,fold:1,isLocked:false}, {x:580,y:200,initialAngle:0,half:42,fold:1,isLocked:false} ],
-      targets:[ {x:500,y:200,r:20,fold:1} ] },
-    { id:13, name:"三镜调校", theme:"#202a5c",
-      emitter:{x:120,y:300,angle:0}, foldAxis:VV, solution:{f1:true},
-      mirrors:[ {x:590,y:300,initialAngle:90,half:42,fold:1,isLocked:false}, {x:590,y:180,initialAngle:90,half:42,fold:1,isLocked:false}, {x:470,y:180,initialAngle:0,half:42,fold:1,isLocked:false} ],
-      blackHoles:[ {x:280,y:300,r:24,fold:0} ],
-      targets:[ {x:470,y:270,r:24,fold:1} ] },
-    { id:14, name:"四镜双洞", theme:"#402e56",
-      emitter:{x:90,y:300,angle:0}, foldAxis:VV, solution:{f1:true},
-      mirrors:[ {x:650,y:300,initialAngle:90,half:42,fold:1,isLocked:false}, {x:650,y:120,initialAngle:90,half:42,fold:1,isLocked:false}, {x:540,y:120,initialAngle:0,half:42,fold:1,isLocked:false}, {x:540,y:360,initialAngle:0,half:42,fold:1,isLocked:false} ],
-      blackHoles:[ {x:200,y:300,r:24,fold:0}, {x:300,y:300,r:24,fold:0} ],
-      targets:[ {x:410,y:360,r:24,fold:1} ] },
-    { id:15, name:"分光大师", theme:"#243048",
-      emitter:{x:130,y:300,angle:0}, foldAxis:VV, solution:{f1:true},
-      prisms:[ {x:570,y:300,angle:-90,r:28,fold:1} ],
-      mirrors:[ {x:500,y:274,initialAngle:90,half:40,fold:1,isLocked:false}, {x:500,y:326,initialAngle:0,half:40,fold:1,isLocked:false}, {x:440,y:376,initialAngle:45,half:36,fold:1,isLocked:false} ],
-      targets:[ {x:440,y:224,r:16,fold:1}, {x:380,y:326,r:16,fold:1} ],
-      blackHoles:[ {x:300,y:300,r:20,fold:0} ] },
-{ id:16, name:"虫洞初涉", newFeature:"portal", theme:"#1c2e52",
-      emitter:{x:140,y:300,angle:0}, foldAxis:VV, solution:{f1:true},
-      wormholes:[ {r:14, a:{x:220,y:300,fold:0}, b:{x:440,y:300,fold:1}} ],
-      mirrors:[ {x:370,y:300,initialAngle:-135,half:42,fold:1,isLocked:true} ],
-      targets:[ {x:370,y:180,r:18,fold:1} ] },
-    { id:17, name:"虫洞折射连击", theme:"#123844",
-      emitter:{x:150,y:300,angle:0}, foldAxis:VV, solution:{f1:true},
-      wormholes:[ {r:14, a:{x:590,y:360,fold:1}, b:{x:500,y:360,fold:1}} ],
-      mirrors:[ {x:590,y:300,initialAngle:45,half:42,fold:1,isLocked:false}, {x:500,y:420,initialAngle:90,half:42,fold:1,isLocked:false} ],
-      targets:[ {x:420,y:420,r:18,fold:1} ] },
-    { id:18, name:"滑轨调距", newFeature:"slider", theme:"#2c1e44",
-      emitter:{x:200,y:300,angle:0}, foldAxis:VV, solution:{f1:true},
-      mirrors:[ {x:580,y:300,initialAngle:-135,half:42,fold:1,isLocked:true,movable:{axis:"x",min:500,max:600}} ],
-      targets:[ {x:540,y:180,r:18,fold:1} ] },
-    { id:19, name:"滤光启蒙", newFeature:"color", theme:"#243048",
-      emitter:{x:200,y:300,angle:0}, foldAxis:VV, solution:{f1:true},
-      dyes:[ {x:540,y:300,angle:90,half:24,fold:1,color:"cyan"} ],
-      targets:[ {x:420,y:300,r:18,fold:1,color:"cyan"} ] },
-    { id:20, name:"分光双色矩阵", theme:"#3a2450",
-      emitter:{x:150,y:300,angle:0}, foldAxis:VV, solution:{f1:true},
-      prisms:[ {x:560,y:300,angle:-90,r:28,fold:1} ],
-      mirrors:[ {x:480,y:271,initialAngle:90,half:40,fold:1,isLocked:false}, {x:480,y:329,initialAngle:0,half:40,fold:1,isLocked:false} ],
-      dyes:[ {x:450,y:246,angle:130,half:22,fold:1,color:"cyan"}, {x:450,y:354,angle:230,half:22,fold:1,color:"red"} ],
-      targets:[ {x:420,y:221,r:17,fold:1,color:"cyan"}, {x:420,y:379,r:17,fold:1,color:"red"} ] },
-    { id:21, name:"虫洞拓扑折叠", theme:"#352a5c",
-      emitter:{x:150,y:300,angle:0}, foldAxis:VV, solution:{f1:true},
-      wormholes:[ {r:14, a:{x:550,y:300,fold:1}, b:{x:350,y:300,fold:0}} ],
-      mirrors:[ {x:390,y:300,initialAngle:-135,half:42,fold:1,isLocked:true} ],
-      targets:[ {x:390,y:180,r:18,fold:1} ] },
-    { id:22, name:"滑轨避障", theme:"#1c3a44",
-      emitter:{x:130,y:300,angle:0}, foldAxis:VV, solution:{f1:true},
-      blackHoles:[ {x:270,y:300,r:22,fold:0} ],
-      mirrors:[ {x:620,y:300,initialAngle:-135,half:42,fold:1,isLocked:true,movable:{axis:"x",min:560,max:620}}, {x:560,y:180,initialAngle:-135,half:42,fold:1,isLocked:true,movable:{axis:"x",min:560,max:620}} ],
-      targets:[ {x:500,y:180,r:18,fold:1} ] },
-    { id:23, name:"三器串联", theme:"#202a5c",
-      emitter:{x:150,y:300,angle:0}, foldAxis:VV, solution:{f1:true},
-      dyes:[ {x:200,y:300,angle:90,half:22,fold:0,color:"cyan"} ],
-      wormholes:[ {r:14, a:{x:240,y:300,fold:0}, b:{x:440,y:300,fold:1}} ],
-      mirrors:[ {x:390,y:300,initialAngle:-135,half:42,fold:1,isLocked:true,movable:{axis:"x",min:350,max:390}} ],
-      targets:[ {x:370,y:180,r:18,fold:1,color:"cyan"} ] },
-    { id:24, name:"时空奇点·终章", theme:"#243048",
-      emitter:{x:150,y:300,angle:0}, foldAxis:VV, solution:{f1:true},
-      prisms:[ {x:560,y:300,angle:-90,r:28,fold:1} ],
-      mirrors:[ {x:480,y:271,initialAngle:90,half:40,fold:1,isLocked:false}, {x:480,y:329,initialAngle:0,half:40,fold:1,isLocked:false} ],
-      dyes:[ {x:450,y:246,angle:130,half:22,fold:1,color:"cyan"}, {x:450,y:354,angle:230,half:22,fold:1,color:"red"} ],
-      targets:[ {x:420,y:221,r:17,fold:1,color:"cyan"}, {x:420,y:379,r:17,fold:1,color:"red"} ],
-      blackHoles:[ {x:330,y:300,r:20,fold:0} ] }
+    { id:1, title:"初识光影", chapter:"第一章 · 晨曦", hint:"💡 点击发射光芒，点亮目标水晶", newFeature:"EMIT", theme:"#0e2440", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.2500,y:0.5000,angle:0}, solution:{f1:false}, targets:[{"x":"0.6250","y":"0.5000","r":20,"color":"white","fold":0}] },
+    { id:2, title:"空间对折", chapter:"第一章 · 晨曦", hint:"✂️ 点击对折，跨越空间边界", newFeature:"FOLD", theme:"#10324a", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.2500,y:0.5000,angle:0}, solution:{f1:true}, mirrors:[{"x":"0.7000","y":"0.5000","initialAngle":-135,"half":42,"fold":1,"isLocked":true}], targets:[{"x":"0.7000","y":"0.3000","r":20,"color":"white","fold":1}] },
+    { id:3, title:"镜面调校", chapter:"第一章 · 晨曦", hint:"🪞 拖动旋钮旋转镜面角度", newFeature:"ROTATE", theme:"#22315a", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.2500,y:0.5000,angle:0}, solution:{f1:true}, mirrors:[{"x":"0.7000","y":"0.5000","initialAngle":0,"half":42,"fold":1,"isLocked":false}], targets:[{"x":"0.7000","y":"0.3000","r":20,"color":"white","fold":1}] },
+    { id:4, title:"双镜直角", chapter:"第一章 · 晨曦", hint:"双镜直角", theme:"#0f3a3e", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.1875,y:0.5000,angle:0}, solution:{f1:true}, mirrors:[{"x":"0.7500","y":"0.5000","initialAngle":90,"half":42,"fold":1,"isLocked":false},{"x":"0.7500","y":"0.3000","initialAngle":0,"half":42,"fold":1,"isLocked":false}], targets:[{"x":"0.6500","y":"0.3000","r":20,"color":"white","fold":1}] },
+    { id:5, title:"跨越黑洞", chapter:"第一章 · 晨曦", hint:"跨越黑洞", theme:"#3a2450", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.1625,y:0.5000,angle:0}, solution:{f1:true}, mirrors:[{"x":"0.7250","y":"0.5000","initialAngle":90,"half":42,"fold":1,"isLocked":false},{"x":"0.7250","y":"0.3333","initialAngle":0,"half":42,"fold":1,"isLocked":false}], blackHoles:[{"x":"0.3500","y":"0.5000","r":24,"fold":0}], targets:[{"x":"0.6250","y":"0.3333","r":20,"color":"white","fold":1}] },
+    { id:6, title:"横向对折", chapter:"第一章 · 晨曦", hint:"横向对折", theme:"#2c1e44", foldAxis:{x1:0.05,y1:0.5,x2:0.95,y2:0.5}, emitter:{x:0.1875,y:0.4167,angle:0}, solution:{f1:true}, mirrors:[{"x":"0.3750","y":"0.5833","initialAngle":0,"half":42,"fold":1,"isLocked":false}], blackHoles:[{"x":"0.4375","y":"0.4167","r":26,"fold":0}], targets:[{"x":"0.3750","y":"0.7500","r":20,"color":"white","fold":1}] },
+    { id:7, title:"分光双目标", chapter:"第二章 · 流光", hint:"🔺 光线穿透后一分为二", newFeature:"PRISM", theme:"#1c2e52", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.1875,y:0.5000,angle:0}, solution:{f1:true}, mirrors:[{"x":"0.6000","y":"0.4517","initialAngle":90,"half":40,"fold":1,"isLocked":false},{"x":"0.6000","y":"0.5483","initialAngle":0,"half":40,"fold":1,"isLocked":false}], prisms:[{"x":"0.7000","y":"0.5000","angle":-90,"r":28,"fold":1}], targets:[{"x":"0.5250","y":"0.3683","r":17,"color":"white","fold":1},{"x":"0.5250","y":"0.6317","r":17,"color":"white","fold":1}] },
+    { id:8, title:"折线迷宫", chapter:"第二章 · 流光", hint:"折线迷宫", theme:"#352a5c", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.1500,y:0.5000,angle:0}, solution:{f1:true}, mirrors:[{"x":"0.7375","y":"0.5000","initialAngle":90,"half":42,"fold":1,"isLocked":false},{"x":"0.7375","y":"0.3000","initialAngle":0,"half":42,"fold":1,"isLocked":false},{"x":"0.5875","y":"0.3000","initialAngle":0,"half":42,"fold":1,"isLocked":false}], blackHoles:[{"x":"0.3500","y":"0.5000","r":24,"fold":0}], targets:[{"x":"0.5875","y":"0.4500","r":24,"color":"white","fold":1}] },
+    { id:9, title:"光影拓扑", chapter:"第二章 · 流光", hint:"光影拓扑", theme:"#123844", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.1125,y:0.5000,angle:0}, solution:{f1:true}, mirrors:[{"x":"0.8125","y":"0.5000","initialAngle":90,"half":42,"fold":1,"isLocked":false},{"x":"0.8125","y":"0.2000","initialAngle":0,"half":42,"fold":1,"isLocked":false},{"x":"0.6750","y":"0.2000","initialAngle":0,"half":42,"fold":1,"isLocked":false},{"x":"0.6750","y":"0.6000","initialAngle":90,"half":42,"fold":1,"isLocked":false}], blackHoles:[{"x":"0.2500","y":"0.5000","r":24,"fold":0},{"x":"0.3750","y":"0.5000","r":24,"fold":0}], targets:[{"x":"0.5125","y":"0.6000","r":24,"color":"white","fold":1}] },
+    { id:10, title:"分光避洞", chapter:"第二章 · 流光", hint:"分光避洞", theme:"#3a2854", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.1875,y:0.5000,angle:0}, solution:{f1:true}, mirrors:[{"x":"0.6000","y":"0.4517","initialAngle":90,"half":40,"fold":1,"isLocked":false},{"x":"0.6000","y":"0.5483","initialAngle":0,"half":40,"fold":1,"isLocked":false}], prisms:[{"x":"0.7000","y":"0.5000","angle":-90,"r":28,"fold":1}], blackHoles:[{"x":"0.4125","y":"0.5000","r":20,"fold":0}], targets:[{"x":"0.5250","y":"0.3683","r":17,"color":"white","fold":1},{"x":"0.5250","y":"0.6317","r":17,"color":"white","fold":1}] },
+    { id:11, title:"折叠次序", chapter:"第二章 · 流光", hint:"折叠次序", theme:"#1c3a44", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.1875,y:0.5000,angle:0}, solution:{f1:true}, mirrors:[{"x":"0.3125","y":"0.5000","initialAngle":0,"half":40,"fold":0,"isLocked":false},{"x":"0.6875","y":"0.4000","initialAngle":90,"half":40,"fold":1,"isLocked":false}], targets:[{"x":"0.6500","y":"0.4000","r":18,"color":"white","fold":1}] },
+    { id:12, title:"双镜调校", chapter:"第二章 · 流光", hint:"双镜调校", theme:"#342440", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.1625,y:0.5000,angle:0}, solution:{f1:true}, mirrors:[{"x":"0.7250","y":"0.5000","initialAngle":90,"half":42,"fold":1,"isLocked":false},{"x":"0.7250","y":"0.3333","initialAngle":0,"half":42,"fold":1,"isLocked":false}], blackHoles:[{"x":"0.3500","y":"0.5000","r":24,"fold":0}], targets:[{"x":"0.6250","y":"0.3333","r":20,"color":"white","fold":1}] },
+    { id:13, title:"三镜调校", chapter:"第二章 · 流光", hint:"三镜调校", theme:"#202a5c", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.1500,y:0.5000,angle:0}, solution:{f1:true}, mirrors:[{"x":"0.7375","y":"0.5000","initialAngle":90,"half":42,"fold":1,"isLocked":false},{"x":"0.7375","y":"0.3000","initialAngle":90,"half":42,"fold":1,"isLocked":false},{"x":"0.5875","y":"0.3000","initialAngle":0,"half":42,"fold":1,"isLocked":false}], blackHoles:[{"x":"0.3500","y":"0.5000","r":24,"fold":0}], targets:[{"x":"0.5875","y":"0.4500","r":24,"color":"white","fold":1}] },
+    { id:14, title:"四镜双洞", chapter:"第二章 · 流光", hint:"四镜双洞", theme:"#402e56", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.1125,y:0.5000,angle:0}, solution:{f1:true}, mirrors:[{"x":"0.8125","y":"0.5000","initialAngle":90,"half":42,"fold":1,"isLocked":false},{"x":"0.8125","y":"0.2000","initialAngle":90,"half":42,"fold":1,"isLocked":false},{"x":"0.6750","y":"0.2000","initialAngle":0,"half":42,"fold":1,"isLocked":false},{"x":"0.6750","y":"0.6000","initialAngle":0,"half":42,"fold":1,"isLocked":false}], blackHoles:[{"x":"0.2500","y":"0.5000","r":24,"fold":0},{"x":"0.3750","y":"0.5000","r":24,"fold":0}], targets:[{"x":"0.5125","y":"0.6000","r":24,"color":"white","fold":1}] },
+    { id:15, title:"分光大师", chapter:"第三章 · 跃迁", hint:"分光大师", theme:"#243048", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.1625,y:0.5000,angle:0}, solution:{f1:true}, mirrors:[{"x":"0.6250","y":"0.4567","initialAngle":90,"half":40,"fold":1,"isLocked":false},{"x":"0.6250","y":"0.5433","initialAngle":0,"half":40,"fold":1,"isLocked":false},{"x":"0.5500","y":"0.6267","initialAngle":45,"half":36,"fold":1,"isLocked":false}], prisms:[{"x":"0.7125","y":"0.5000","angle":-90,"r":28,"fold":1}], blackHoles:[{"x":"0.3750","y":"0.5000","r":20,"fold":0}], targets:[{"x":"0.5500","y":"0.3733","r":16,"color":"white","fold":1},{"x":"0.4750","y":"0.5433","r":16,"color":"white","fold":1}] },
+    { id:16, title:"虫洞初涉", chapter:"第三章 · 跃迁", hint:"🌀 光线射入一端从另一端穿出", newFeature:"PORTAL", theme:"#1c2e52", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.1750,y:0.5000,angle:0}, solution:{f1:true}, mirrors:[{"x":"0.4625","y":"0.5000","initialAngle":-135,"half":42,"fold":1,"isLocked":true}], portals:[{"r":14,"a":{"x":"0.2750","y":"0.5000","fold":0},"b":{"x":"0.5500","y":"0.5000","fold":1}}], targets:[{"x":"0.4625","y":"0.3000","r":18,"color":"white","fold":1}] },
+    { id:17, title:"虫洞折射连击", chapter:"第三章 · 跃迁", hint:"虫洞折射连击", theme:"#123844", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.1875,y:0.5000,angle:0}, solution:{f1:true}, mirrors:[{"x":"0.7375","y":"0.5000","initialAngle":45,"half":42,"fold":1,"isLocked":false},{"x":"0.6250","y":"0.7000","initialAngle":90,"half":42,"fold":1,"isLocked":false}], portals:[{"r":14,"a":{"x":"0.7375","y":"0.6000","fold":1},"b":{"x":"0.6250","y":"0.6000","fold":1}}], targets:[{"x":"0.5250","y":"0.7000","r":18,"color":"white","fold":1}] },
+    { id:18, title:"滑轨调距", chapter:"第三章 · 跃迁", hint:"🎚️ 拖拽镜面沿轨道平移", newFeature:"SLIDER", theme:"#2c1e44", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.2500,y:0.5000,angle:0}, solution:{f1:true}, sliders:[{"x":"0.7250","y":"0.5000","initialAngle":-135,"half":42,"fold":1,"isLocked":true,"track":{"axis":"x","min":"0.6250","max":"0.7500"}}], targets:[{"x":"0.6750","y":"0.3000","r":18,"color":"white","fold":1}] },
+    { id:19, title:"滤光启蒙", chapter:"第三章 · 跃迁", hint:"💠 将白光转化为特定色彩", newFeature:"COLOR", theme:"#243048", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.2500,y:0.5000,angle:0}, solution:{f1:true}, targets:[{"x":"0.5250","y":"0.5000","r":18,"color":"cyan","fold":1}], dyes:[{"x":"0.6750","y":"0.5000","angle":90,"half":24,"color":"cyan","fold":1}] },
+    { id:20, title:"分光双色矩阵", chapter:"第三章 · 跃迁", hint:"分光双色矩阵", theme:"#3a2450", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.1875,y:0.5000,angle:0}, solution:{f1:true}, mirrors:[{"x":"0.6000","y":"0.4517","initialAngle":90,"half":40,"fold":1,"isLocked":false},{"x":"0.6000","y":"0.5483","initialAngle":0,"half":40,"fold":1,"isLocked":false}], prisms:[{"x":"0.7000","y":"0.5000","angle":-90,"r":28,"fold":1}], targets:[{"x":"0.5250","y":"0.3683","r":17,"color":"cyan","fold":1},{"x":"0.5250","y":"0.6317","r":17,"color":"red","fold":1}], dyes:[{"x":"0.5625","y":"0.4100","angle":130,"half":22,"color":"cyan","fold":1},{"x":"0.5625","y":"0.5900","angle":230,"half":22,"color":"red","fold":1}] },
+    { id:21, title:"虫洞拓扑折叠", chapter:"第三章 · 跃迁", hint:"虫洞拓扑折叠", theme:"#352a5c", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.1875,y:0.5000,angle:0}, solution:{f1:true}, mirrors:[{"x":"0.4875","y":"0.5000","initialAngle":-135,"half":42,"fold":1,"isLocked":true}], portals:[{"r":14,"a":{"x":"0.6875","y":"0.5000","fold":1},"b":{"x":"0.4375","y":"0.5000","fold":0}}], targets:[{"x":"0.4875","y":"0.3000","r":18,"color":"white","fold":1}] },
+    { id:22, title:"滑轨避障", chapter:"第三章 · 跃迁", hint:"滑轨避障", theme:"#1c3a44", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.1625,y:0.5000,angle:0}, solution:{f1:true}, sliders:[{"x":"0.7750","y":"0.5000","initialAngle":-135,"half":42,"fold":1,"isLocked":true,"track":{"axis":"x","min":"0.7000","max":"0.7750"}},{"x":"0.7000","y":"0.3000","initialAngle":-135,"half":42,"fold":1,"isLocked":true,"track":{"axis":"x","min":"0.7000","max":"0.7750"}}], blackHoles:[{"x":"0.3375","y":"0.5000","r":22,"fold":0}], targets:[{"x":"0.6250","y":"0.3000","r":18,"color":"white","fold":1}] },
+    { id:23, title:"三器串联", chapter:"第四章 · 引力", hint:"三器串联", theme:"#202a5c", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.1875,y:0.5000,angle:0}, solution:{f1:true}, sliders:[{"x":"0.4875","y":"0.5000","initialAngle":-135,"half":42,"fold":1,"isLocked":true,"track":{"axis":"x","min":"0.4375","max":"0.4875"}}], portals:[{"r":14,"a":{"x":"0.3000","y":"0.5000","fold":0},"b":{"x":"0.5500","y":"0.5000","fold":1}}], targets:[{"x":"0.4625","y":"0.3000","r":18,"color":"cyan","fold":1}], dyes:[{"x":"0.2500","y":"0.5000","angle":90,"half":22,"color":"cyan","fold":0}] },
+    { id:24, title:"时空奇点·终章", chapter:"第四章 · 引力", hint:"时空奇点·终章", theme:"#243048", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.1875,y:0.5000,angle:0}, solution:{f1:true}, mirrors:[{"x":"0.6000","y":"0.4517","initialAngle":90,"half":40,"fold":1,"isLocked":false},{"x":"0.6000","y":"0.5483","initialAngle":0,"half":40,"fold":1,"isLocked":false}], prisms:[{"x":"0.7000","y":"0.5000","angle":-90,"r":28,"fold":1}], blackHoles:[{"x":"0.4125","y":"0.5000","r":20,"fold":0}], targets:[{"x":"0.5250","y":"0.3683","r":17,"color":"cyan","fold":1},{"x":"0.5250","y":"0.6317","r":17,"color":"red","fold":1}], dyes:[{"x":"0.5625","y":"0.4100","angle":130,"half":22,"color":"cyan","fold":1},{"x":"0.5625","y":"0.5900","angle":230,"half":22,"color":"red","fold":1}] },
+    { id:25, title:"引力偏折", chapter:"第四章 · 引力", hint:"🪐 光线经过力场边缘会弯曲偏折", newFeature:"LENS", theme:"#1c2e52", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.1875,y:0.5000,angle:0}, solution:{f1:true}, gravityWells:[{"x":"0.6250","y":"0.5000","r":20,"influence":46,"bend":35,"fold":1}], targets:[{"x":"0.4875","y":"0.6600","r":18,"color":"white","fold":0}] },
+    { id:26, title:"光能机关", chapter:"第四章 · 引力", hint:"⚡ 先用光线激活感应器，解除光墙", newFeature:"GATE", theme:"#243048", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.1875,y:0.5000,angle:0}, solution:{f1:true}, prisms:[{"x":"0.7125","y":"0.5000","angle":-90,"r":28,"fold":1}], gates:[{"sensor":{"x":"0.3750","y":"0.4700","r":16,"fold":0},"wall":{"x":"0.6000","y":"0.5417","angle":250,"half":30,"fold":1}}], targets:[{"x":"0.5125","y":"0.5833","r":18,"color":"white","fold":1}] },
+    { id:27, title:"弧光回旋", chapter:"第四章 · 引力", hint:"🪐 引力透镜让光线弯曲，绕过虚空", newFeature:"lens", theme:"#1c2e52", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.1875,y:0.5,angle:0}, solution:{f1:true}, gravityWells:[{"x":0.625,"y":0.5,"r":20,"influence":46,"bend":45,"fold":1}], targets:[{"x":0.487,"y":0.726,"r":18,"fold":0}] },
+    { id:28, title:"引力开门", chapter:"第四章 · 引力", hint:"⚡ 分光激活感应器，解除光墙", newFeature:"gate", theme:"#243048", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.1875,y:0.5,angle:0}, solution:{f1:true}, prisms:[{"x":0.7,"y":0.5,"angle":-90,"r":28,"fold":1}], gates:[{"sensor":{"x":0.3875,"y":0.47,"r":16,"fold":0},"wall":{"x":0.56,"y":0.56,"angle":250,"half":30,"fold":1}}], targets:[{"x":0.48,"y":0.6,"r":18,"fold":1}] },
+    { id:29, title:"虫洞传导机关", chapter:"第四章 · 引力", hint:"🌀 光线射入虫洞一端，从另一端穿出", newFeature:"portal", theme:"#123844", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.175,y:0.5,angle:0}, solution:{f1:true}, mirrors:[{"x":0.5,"y":0.5,"initialAngle":-135,"half":42,"fold":1,"isLocked":true}], portals:[{"r":14,"a":{"x":0.3,"y":0.5,"fold":0},"b":{"x":0.6,"y":0.5,"fold":1}}], targets:[{"x":0.5,"y":0.28,"r":18,"fold":1}] },
+    { id:30, title:"滑轨折跃", chapter:"第四章 · 引力", hint:"🎚️ 拖动镜面沿轨道，对准折叠后的水晶", newFeature:"slider", theme:"#3a2450", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.2,y:0.5,angle:0}, solution:{f1:true}, sliders:[{"x":0.7,"y":0.5,"initialAngle":-135,"half":42,"fold":1,"isLocked":true,"track":{"axis":"x","min":0.62,"max":0.72}}], targets:[{"x":0.65,"y":0.3,"r":18,"fold":1}] },
+    { id:31, title:"空间折叠交响", chapter:"第五章 · 终章", hint:"🎯 双镜接力，折出光之交响", newFeature:"fold", theme:"#202a5c", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.18,y:0.5,angle:0}, solution:{f1:true}, mirrors:[{"x":0.62,"y":0.5,"initialAngle":90,"half":42,"fold":1,"isLocked":false},{"x":0.62,"y":0.34,"initialAngle":0,"half":42,"fold":1,"isLocked":false}], targets:[{"x":0.5,"y":0.34,"r":18,"fold":1}] },
+    { id:32, title:"弦论光网", chapter:"第五章 · 终章", hint:"🌀 虫洞 + 旋镜，校准光之弦", newFeature:"portal", theme:"#1c2e52", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.175,y:0.5,angle:0}, solution:{f1:true}, mirrors:[{"x":0.5,"y":0.5,"initialAngle":90,"half":42,"fold":1,"isLocked":false}], portals:[{"r":14,"a":{"x":0.3,"y":0.5,"fold":0},"b":{"x":0.58,"y":0.5,"fold":1}}], targets:[{"x":0.5,"y":0.28,"r":18,"fold":1}] },
+    { id:33, title:"滤色滑轨", chapter:"第五章 · 终章", hint:"🎚️ 滑轨 + 滤光，校准青色光路", newFeature:"slider", theme:"#402e56", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.16,y:0.5,angle:0}, solution:{f1:true}, sliders:[{"x":0.7,"y":0.5,"initialAngle":-135,"half":42,"fold":1,"isLocked":true,"track":{"axis":"x","min":0.62,"max":0.72}}], targets:[{"x":0.65,"y":0.3,"r":18,"color":"cyan","fold":1}], dyes:[{"x":0.3,"y":0.5,"angle":90,"half":22,"color":"cyan","fold":0}] },
+    { id:34, title:"虚空穿刺", chapter:"第五章 · 终章", hint:"🕳️ 旋镜避洞，穿过虚空", newFeature:"rotate", theme:"#243048", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.1625,y:0.4333,angle:0}, solution:{f1:true}, mirrors:[{"x":0.725,"y":0.4333,"initialAngle":90,"half":42,"fold":1,"isLocked":false},{"x":0.725,"y":0.2667,"initialAngle":0,"half":42,"fold":1,"isLocked":false}], blackHoles:[{"x":0.35,"y":0.4333,"r":24,"fold":0}], targets:[{"x":0.625,"y":0.2667,"r":20,"fold":1}] },
+    { id:35, title:"全要素矩阵", chapter:"第五章 · 终章", hint:"🌌 集齐七种器具，横跨全屏光网", newFeature:"lens", theme:"#3a2854", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.16,y:0.5,angle:0}, solution:{f1:true}, mirrors:[{"x":0.66,"y":0.66,"initialAngle":90,"half":40,"fold":1,"isLocked":false}], sliders:[{"x":0.66,"y":0.34,"initialAngle":0,"half":40,"fold":1,"isLocked":true,"track":{"axis":"x","min":0.6,"max":0.72}}], prisms:[{"x":0.46,"y":0.5,"angle":-90,"r":26,"fold":0}], gravityWells:[{"x":0.34,"y":0.42,"influence":36,"bend":-35,"fold":0}], targets:[{"x":0.72,"y":0.5,"r":16,"fold":1}] },
+    { id:36, title:"终焉·光之奇点", chapter:"第五章 · 终章", hint:"✨ 分光 · 感应 · 光墙，最后的奇点", newFeature:"gate", theme:"#0e2440", foldAxis:{x1:0.5,y1:0.05,x2:0.5,y2:0.95}, emitter:{x:0.16,y:0.5,angle:0}, solution:{f1:true}, prisms:[{"x":0.66,"y":0.5,"angle":-90,"r":28,"fold":1}], gates:[{"sensor":{"x":0.406,"y":0.477,"r":16,"fold":0},"wall":{"x":0.54,"y":0.56,"angle":250,"half":30,"fold":1}}], targets:[{"x":0.46,"y":0.6,"r":18,"fold":1}] }
   ];
+
+
+
 
 
   const FOLD_DURATION=0.3, MAX_BOUNCE=8, DEG=Math.PI/180;
@@ -245,7 +180,9 @@
     prism:{icon:'🔺',title:'三棱镜',desc:'光线穿透后一分为二，需分别命中两个水晶'},
     portal:{icon:'🌀',title:'时空虫洞',desc:'光线射入任意一端，将跨越空间从另一端穿出'},
     slider:{icon:'🎚️',title:'滑轨镜面',desc:'既能旋转角度，也可沿轨道前后拖拽移动位置'},
-    color:{icon:'💠',title:'滤光晶片',desc:'将白光转化为特定色彩，仅对应色彩能激活同色水晶'} };
+    color:{icon:'💠',title:'滤光晶片',desc:'将白光转化为特定色彩，仅对应色彩能激活同色水晶'},
+    lens:{icon:'🪐',title:'引力透镜',desc:'光线经过其边缘时会产生优美的弧形弯曲偏折'},
+    gate:{icon:'⚡',title:'光能机关',desc:'先用光线激活感应器，即可解除封锁光墙'} };
 
   /* ============ AudioEngine：BGM + SFX ============ */
   class AudioEngine {
@@ -298,7 +235,7 @@
   class Scene {
     constructor(canvas){
       this.canvas=canvas; this.ctx=canvas.getContext('2d');
-      this.dpr=Math.min(window.devicePixelRatio||1,3); this.scale=1; this.ox=0; this.oy=0;
+      this.dpr=Math.min(window.devicePixelRatio||1,3); this.scaleX=1; this.scaleY=1; this.ox=0; this.oy=0;
       this.audio=new AudioEngine(); this.buildGlowSprites();
       this.dust=[]; for(let i=0;i<56;i++)this.dust.push({x:Math.random()*800,y:Math.random()*600,r:.6+Math.random()*1.8,dx:(Math.random()-.5)*6,dy:(Math.random()-.5)*4,ph:Math.random()*6.28,sp:.2+Math.random()*.6,al:.05+Math.random()*.2});
       this.stream=[]; this.trailPool=[]; this.state='PLANNING'; this.time=0;
@@ -315,7 +252,8 @@
     }
     resize(){ const W=window.innerWidth, H=window.innerHeight;
       this.canvas.width=Math.floor(W*this.dpr); this.canvas.height=Math.floor(H*this.dpr);
-      this.scale=Math.min(W/800, H/600); this.ox=(W-800*this.scale)/2; this.oy=(H-600*this.scale)/2; }
+      // 归一化有效操作区：横向 10%~90%、纵向 12%~75%，折叠轴 X=50% 落在屏幕正中
+      this.scaleX=0.8*W/800; this.scaleY=0.63*H/600; this.ox=0.1*W; this.oy=0.12*H; }
     buildGlowSprites(){ const colors={white:'255,255,255',cyan:'121,255,225',blue:'122,208,255',violet:'168,147,255',pink:'255,122,224',red:'255,107,107',gold:'255,216,138',green:'120,255,220'};
       this.glows={}; for(const k in colors){ const c=document.createElement('canvas'); c.width=c.height=64; const g=c.getContext('2d');
         const gr=g.createRadialGradient(32,32,0,32,32,32); gr.addColorStop(0,`rgba(${colors[k]},0.9)`); gr.addColorStop(.4,`rgba(${colors[k]},0.3)`); gr.addColorStop(1,`rgba(${colors[k]},0)`);
@@ -337,28 +275,34 @@
       document.addEventListener('gesturestart',e=>e.preventDefault());
       document.addEventListener('dblclick',e=>e.preventDefault());
     }
-    canvasPos(e){ const r=this.canvas.getBoundingClientRect(); return new Vector2D((e.clientX-r.left-this.ox)/this.scale, (e.clientY-r.top-this.oy)/this.scale); }
+    canvasPos(e){ const r=this.canvas.getBoundingClientRect(); return new Vector2D((e.clientX-r.left-this.ox)/this.scaleX, (e.clientY-r.top-this.oy)/this.scaleY); }
 
     loadLevel(i){
       this.levelIndex=i; this.level=LEVELS[i];
+      const NX=x=>x*800, NY=y=>y*600;   // 归一化坐标(0~1) → 逻辑坐标(800×600)
+      const fa=this.level.foldAxis||{x1:0.5,y1:0.05,x2:0.5,y2:0.95};
+      const A={x:NX(fa.x1),y:NY(fa.y1)}, B={x:NX(fa.x2),y:NY(fa.y2)};
+      this.axes=[{a:new Vector2D(A.x,A.y),b:new Vector2D(B.x,B.y)},{a:new Vector2D(A.x,A.y),b:new Vector2D(B.x,B.y)}];
       this.objects=[];
-      for(const m of this.level.mirrors||[]) this.objects.push({type:'mirror',x:m.x,y:m.y,angle:m.initialAngle,half:m.half||42,fold:m.fold,rot:!m.isLocked,movable:m.movable||null});
-      for(const p of this.level.prisms||[]) this.objects.push({type:'prism',x:p.x,y:p.y,angle:p.angle,r:p.r,fold:p.fold});
-      for(const b of this.level.blackHoles||[]) this.objects.push({type:'blackhole',x:b.x,y:b.y,r:b.r,fold:b.fold});
-      for(const d of this.level.dyes||[]) this.objects.push({type:'dye',x:d.x,y:d.y,angle:d.angle,half:d.half||24,fold:d.fold,color:d.color});
-      for(const w of this.level.wormholes||[]) this.objects.push({type:'wormhole',r:w.r||14,a:{x:w.a.x,y:w.a.y,fold:w.a.fold},b:{x:w.b.x,y:w.b.y,fold:w.b.fold}});
-      for(const t of this.level.targets||[]) this.objects.push({type:'crystal',x:t.x,y:t.y,r:t.r,color:t.color||'white',fold:t.fold});
-      this.light={ x:this.level.emitter.x, y:this.level.emitter.y, angle:this.level.emitter.angle, movable:null };
-      this.axes=[{a:new Vector2D(this.level.foldAxis[0].a.x,this.level.foldAxis[0].a.y),b:new Vector2D(this.level.foldAxis[0].b.x,this.level.foldAxis[0].b.y)},{a:new Vector2D(this.level.foldAxis[1].a.x,this.level.foldAxis[1].a.y),b:new Vector2D(this.level.foldAxis[1].b.x,this.level.foldAxis[1].b.y)}];
+      for(const m of this.level.mirrors||[]) this.objects.push({type:'mirror',x:NX(m.x),y:NY(m.y),angle:m.initialAngle,half:m.half||42,fold:m.fold===undefined?1:m.fold,rot:!m.isLocked,movable:null});
+      for(const s of this.level.sliders||[]) this.objects.push({type:'mirror',x:NX(s.x),y:NY(s.y),angle:s.initialAngle,half:s.half||42,fold:s.fold===undefined?1:s.fold,rot:!s.isLocked,movable:{axis:s.track.axis,min:NX(s.track.min),max:NX(s.track.max)}});
+      for(const p of this.level.prisms||[]) this.objects.push({type:'prism',x:NX(p.x),y:NY(p.y),angle:p.angle,r:p.r||28,fold:p.fold===undefined?1:p.fold});
+      for(const b of this.level.blackHoles||[]) this.objects.push({type:'blackhole',x:NX(b.x),y:NY(b.y),r:b.r||24,fold:b.fold===undefined?0:b.fold});
+      for(const d of this.level.dyes||[]) this.objects.push({type:'dye',x:NX(d.x),y:NY(d.y),angle:d.angle,half:d.half||24,fold:d.fold===undefined?1:d.fold,color:d.color});
+      for(const po of this.level.portals||[]) this.objects.push({type:'wormhole',r:po.r||14,a:{x:NX(po.a.x),y:NY(po.a.y),fold:po.a.fold===undefined?0:po.a.fold},b:{x:NX(po.b.x),y:NY(po.b.y),fold:po.b.fold===undefined?0:po.b.fold}});
+      for(const g of this.level.gravityWells||[]) this.objects.push({type:'lens',x:NX(g.x),y:NY(g.y),r:g.r||20,influence:g.influence||46,bend:(g.bend||35)*DEG,fold:g.fold===undefined?0:g.fold,movable:g.track?{axis:g.track.axis,min:NX(g.track.min),max:NX(g.track.max)}:null});
+      for(const g of this.level.gates||[]) this.objects.push({type:'gate',sensor:{x:NX(g.sensor.x),y:NY(g.sensor.y),r:g.sensor.r||16,fold:g.sensor.fold===undefined?0:g.sensor.fold},wall:{x:NX(g.wall.x),y:NY(g.wall.y),angle:g.wall.angle,half:g.wall.half||60,fold:g.wall.fold===undefined?0:g.wall.fold}});
+      for(const t of this.level.targets||[]) this.objects.push({type:'crystal',x:NX(t.x),y:NY(t.y),r:t.r||18,color:t.color||'white',fold:t.fold===undefined?1:t.fold});
+      this.light={ x:NX(this.level.emitter.x), y:NY(this.level.emitter.y), angle:this.level.emitter.angle, movable:null };
       this.folds=[{t:0,target:0,amount:0},{t:0,target:0,amount:0}];
-      this.fab.textContent='对折'; this.lvlInd.textContent=`— LEVEL ${String(this.level.id).padStart(2,'0')} / 24 —`;
-      this.state='PLANNING'; this.pulses=[]; this.trails=[]; this.sparks=[]; this.rings=[]; this.selected=null; this.drag=null; this.rayResult=null;
+      this.fab.textContent='对折'; this.lvlInd.textContent=`${this.level.chapter||''} · ${String(this.level.id).padStart(2,'0')} / 36`;
+      this.state='PLANNING'; this.pulses=[]; this.trails=[]; this.sparks=[]; this.rings=[]; this.selected=null; this.drag=null; this.rayResult=null; this.gateActivated=new Set();
       this.tutorialDone=false; this.tutorialAlpha=1; this.tickAngle=null; this.hoverMirror=null; this.guideDismissed=false;
       this.updateGuide();
     }
     updateGuide(){
       if(!this.guideCard) return;
-      const f=this.level.newFeature?FEATURES[this.level.newFeature]:null;
+      const f=this.level.newFeature?FEATURES[(this.level.newFeature+'').toLowerCase()]:null;
       if(f && !this.guideDismissed){
         this.guideCard.querySelector('.ic').textContent=f.icon;
         this.guideCard.querySelector('.tt').textContent=f.title;
@@ -386,7 +330,7 @@
     lightDir(){ const a=this.light.angle*DEG; return new Vector2D(Math.cos(a),Math.sin(a)); }
 
     currentGeometry(){
-      const s1=this.flipScale(0),s2=this.flipScale(1); const geo={mirrors:[],blackholes:[],crystals:[],prisms:[],dyes:[],wormholes:[]}; let cid=0;
+      const s1=this.flipScale(0),s2=this.flipScale(1); const geo={mirrors:[],blackholes:[],crystals:[],prisms:[],dyes:[],wormholes:[],lenses:[],gateSensors:[],gateWalls:[]}; let cid=0, gid=0;
       for(let i=0;i<this.objects.length;i++){ const o=this.objects[i];
         const c=this.foldPos(new Vector2D(o.x,o.y),o.fold);
         if(o.type==='mirror'){ const t=this.foldVec(new Vector2D(Math.cos(o.angle*DEG),Math.sin(o.angle*DEG)),o.fold);
@@ -399,6 +343,11 @@
           geo.dyes.push({kind:'dye',a:c.sub(t.mul(o.half)),b:c.add(t.mul(o.half)),center:c,half:o.half,mask:COLOR_MASK[o.color],color:o.color}); }
         else if(o.type==='wormhole'){ const pa=this.foldPos(new Vector2D(o.a.x,o.a.y),o.a.fold), pb=this.foldPos(new Vector2D(o.b.x,o.b.y),o.b.fold);
           geo.wormholes.push({kind:'wormhole',center:pa,radius:o.r,partner:pb,tag:'a'}); geo.wormholes.push({kind:'wormhole',center:pb,radius:o.r,partner:pa,tag:'b'}); }
+        else if(o.type==='lens'){ geo.lenses.push({kind:'lens',center:c,radius:o.r,influence:o.influence,bend:o.bend,objIndex:i}); }
+        else if(o.type==='gate'){ const sc=this.foldPos(new Vector2D(o.sensor.x,o.sensor.y),o.sensor.fold), wc=this.foldPos(new Vector2D(o.wall.x,o.wall.y),o.wall.fold);
+          const wt=this.foldVec(new Vector2D(Math.cos(o.wall.angle*DEG),Math.sin(o.wall.angle*DEG)),o.wall.fold);
+          geo.gateSensors.push({kind:'sensor',center:sc,radius:o.sensor.r,gateId:gid,wallCenter:wc});
+          geo.gateWalls.push({kind:'wall',a:wc.sub(wt.mul(o.wall.half)),b:wc.add(wt.mul(o.wall.half)),center:wc,gateId:gid}); gid++; }
       }
       return geo;
     }
@@ -410,6 +359,7 @@
       if(this.state!=='PLANNING') return;
       this.geo=this.currentGeometry();
       this.rayResult=Raycaster.cast(this.lightPos(),this.lightDir(),this.geo,MAX_BOUNCE);
+      this.gateActivated=new Set(this.rayResult.gateHits||[]);
       this.state='EMITTING'; this.pitch=0; this.audio.playEmit();
       this.pulses=[]; this.buildPulses(this.rayResult.root,0,1050);
       this.trails.length=0; this.sparks.length=0; this.rings.length=0;
@@ -512,7 +462,7 @@
       c.clearRect(0,0,this.canvas.width,this.canvas.height);
       this.drawBackground(c);
       // 视口变换：800×600 游戏区居中缩放
-      c.setTransform(this.dpr*this.scale,0,0,this.dpr*this.scale,this.dpr*this.ox,this.dpr*this.oy);
+      c.setTransform(this.dpr*this.scaleX,0,0,this.dpr*this.scaleY,this.dpr*this.ox,this.dpr*this.oy);
       if(this.viewScale!==1){ c.translate(400,300); c.scale(this.viewScale,this.viewScale); c.translate(-400,-300); }
       c.globalAlpha=this.viewAlpha;
       this.drawDust(c); this.drawAxes(c); this.drawObjects(c);
@@ -538,7 +488,7 @@
     drawAxes(c){ const [p1,p2]=this.axisBoundary(this.axes[0]);
       c.save(); c.lineCap='round'; c.strokeStyle='rgba(255,216,138,0.14)'; c.lineWidth=10; c.beginPath(); c.moveTo(p1.x,p1.y); c.lineTo(p2.x,p2.y); c.stroke();
       c.strokeStyle='rgba(255,216,138,0.66)'; c.lineWidth=2; c.setLineDash([10,9]); c.beginPath(); c.moveTo(p1.x,p1.y); c.lineTo(p2.x,p2.y); c.stroke(); c.setLineDash([]); c.restore(); }
-    drawObjects(c){ const g=this.geo; if(!g)return; for(const b of g.blackholes)this.drawBlackHole(c,b); for(const w of g.wormholes)this.drawWormhole(c,w); for(const m of g.mirrors)this.drawMirror(c,m); for(const p of g.prisms)this.drawPrism(c,p); for(const d of g.dyes)this.drawDye(c,d); for(const cr of g.crystals)this.drawCrystal(c,cr); }
+    drawObjects(c){ const g=this.geo; if(!g)return; for(const b of g.blackholes)this.drawBlackHole(c,b); for(const w of g.wormholes)this.drawWormhole(c,w); for(const l of g.lenses)this.drawLens(c,l); for(const m of g.mirrors)this.drawMirror(c,m); for(const p of g.prisms)this.drawPrism(c,p); for(const d of g.dyes)this.drawDye(c,d); for(const s of g.gateSensors)this.drawSensor(c,s); for(const w of g.gateWalls)this.drawWall(c,w); for(const cr of g.crystals)this.drawCrystal(c,cr); }
 
     drawBlackHole(c,b){ this.glow(b.center.x,b.center.y,b.radius*2.4,'violet',0.5);
       // 旋转吸积盘光环
@@ -603,7 +553,24 @@
       c.fillStyle=`rgba(${col},0.26)`; c.fillRect(-d.half,-5,d.half*2,10);
       c.strokeStyle=`rgba(${col},0.85)`; c.lineWidth=1.6; c.strokeRect(-d.half,-5,d.half*2,10); c.restore();
       this.glow(d.center.x,d.center.y,16,d.color==='cyan'?'cyan':'red',0.3); }
-    /* 终点水晶：仪式基座 + 自转八面体 + 保护环（彩色） */
+    /* 引力偏折透镜：旋转淡蓝光晕环形透明透镜 */
+    drawLens(c,l){ const p=l.center, rot=this.time*0.7;
+      this.glow(p.x,p.y,l.influence*1.9,'blue',0.3);
+      c.save(); c.translate(p.x,p.y); c.rotate(rot);
+      c.strokeStyle='rgba(120,210,255,0.75)'; c.lineWidth=2.5; c.beginPath(); c.arc(0,0,l.radius,0,6.28); c.stroke();
+      c.strokeStyle='rgba(120,210,255,0.3)'; c.lineWidth=1.2; c.setLineDash([5,6]); c.beginPath(); c.arc(0,0,l.influence,0,6.28); c.stroke(); c.setLineDash([]); c.restore();
+      c.save(); c.translate(p.x,p.y); c.rotate(-rot); c.fillStyle='rgba(150,225,255,0.25)'; c.beginPath(); c.arc(0,0,l.radius*0.55,0,6.28); c.fill(); c.restore(); }
+    /* 光能机关：感应器 A + 阻挡能量墙 B（虚线相连） */
+    drawSensor(c,s){ c.save(); c.strokeStyle='rgba(255,220,130,0.3)'; c.lineWidth=1.2; c.setLineDash([4,6]);
+      c.beginPath(); c.moveTo(s.center.x,s.center.y); c.lineTo(s.wallCenter.x,s.wallCenter.y); c.stroke(); c.setLineDash([]); c.restore();
+      this.glow(s.center.x,s.center.y,s.radius*2,'gold',0.5);
+      c.fillStyle='#0e1424'; c.strokeStyle='#ffd88a'; c.lineWidth=2; c.beginPath(); c.arc(s.center.x,s.center.y,s.radius,0,6.28); c.fill(); c.stroke();
+      c.fillStyle='rgba(255,216,138,0.85)'; c.beginPath(); c.arc(s.center.x,s.center.y,s.radius*0.4,0,6.28); c.fill(); }
+    drawWall(c,w){ const open=this.gateActivated&&this.gateActivated.has(w.gateId);
+      c.save(); c.lineCap='round'; const a=open?0.15:0.9;
+      this.glow(w.center.x,w.center.y,26,open?'cyan':'gold',open?0.3:0.5);
+      c.strokeStyle=`rgba(120,230,255,${a})`; c.lineWidth=5; c.setLineDash(open?[1,1]:[10,6]);
+      c.beginPath(); c.moveTo(w.a.x,w.a.y); c.lineTo(w.b.x,w.b.y); c.stroke(); c.setLineDash([]); c.restore(); }
     drawCrystal(c,cr){ const p=cr.center, r=cr.radius, active=this.rayResult&&this.rayResult.solved;
       const pal=cr.mask===1?['rgba(120,230,255,0.85)','cyan']:cr.mask===2?['rgba(255,120,140,0.85)','red']:cr.mask===3?['rgba(205,150,255,0.85)','purple']:['rgba(201,167,255,0.85)','violet'];
       // 几何仪式基座
@@ -668,8 +635,8 @@
           c.beginPath(); c.moveTo(0,-4.5); c.lineTo(6,0); c.lineTo(0,4.5); c.closePath(); c.fill(); c.restore(); } } }
     drawHud(c){
       c.setTransform(1,0,0,1,0,0);
-      const S=this.scale*this.dpr, cx=this.canvas.width/2, H=this.canvas.height;
-      const sx=p=>p.x*S+this.ox*this.dpr, sy=p=>p.y*S+this.oy*this.dpr;
+      const S=Math.min(this.scaleX,this.scaleY)*this.dpr, cx=this.canvas.width/2, H=this.canvas.height;
+      const sx=p=>p.x*this.scaleX*this.dpr+this.ox*this.dpr, sy=p=>p.y*this.scaleY*this.dpr+this.oy*this.dpr;
       if(this.level.tutorial&&!this.tutorialDone&&this.state==='PLANNING'){
         const a=0.5+0.5*Math.sin(this.time*3)*this.tutorialAlpha;
         c.save(); c.textAlign='center'; c.font='600 16px "Microsoft YaHei",sans-serif'; c.fillStyle=`rgba(230,240,255,${(0.85*a).toFixed(3)})`;
