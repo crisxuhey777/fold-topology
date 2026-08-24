@@ -1,0 +1,7 @@
+# 仅提交本游戏，忽略工作区内的其他项目与临时文件
+arena-brawl-single/
+gomoku-quest/
+repo_src/
+arena-brawl-single.zip
+debug.log
+*.zip
