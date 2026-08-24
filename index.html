@@ -44,7 +44,7 @@
 </style>
 </head>
 <body>
-  <div class="topbar"><span class="lvl" id="lvlInd">— LEVEL 01 / 24 —</span></div>
+  <div class="topbar"><span class="lvl" id="lvlInd">— 01 / 36 —</span></div>
   <button class="mute" id="muteBtn" title="音乐/音效">♪</button>
   <canvas id="game"></canvas>
   <div id="guideCard"><span class="ic">💡</span><span class="tt">光源</span><span class="ds">· 点击发射光芒</span></div>
@@ -123,7 +123,7 @@
     }
   }
 
-  /* ============ 关卡库（24 关阶梯） ============ */
+  /* ============ 关卡库（36 关 · 五大章节） ============ */
   const VV=[{a:{x:400,y:60},b:{x:400,y:540}},{a:{x:400,y:60},b:{x:400,y:540}}];
   const HV=[{a:{x:60,y:300},b:{x:740,y:300}},{a:{x:400,y:60},b:{x:400,y:540}}];
   const LEVELS=[
@@ -252,8 +252,10 @@
     }
     resize(){ const W=window.innerWidth, H=window.innerHeight;
       this.canvas.width=Math.floor(W*this.dpr); this.canvas.height=Math.floor(H*this.dpr);
-      // 归一化有效操作区：横向 10%~90%、纵向 12%~75%，折叠轴 X=50% 落在屏幕正中
-      this.scaleX=0.8*W/800; this.scaleY=0.63*H/600; this.ox=0.1*W; this.oy=0.12*H; }
+      // 等比缩放：保持 4:3 画面不变形（圆形仍为圆形），并在横向 10%~90%、纵向 12%~75% 的安全区内居中，折叠轴 X=50% 落在屏幕正中
+      const s=Math.min(0.8*W/800, 0.63*H/600);
+      this.scaleX=s; this.scaleY=s;
+      this.ox=0.1*W+(0.8*W-800*s)/2; this.oy=0.12*H+(0.63*H-600*s)/2; }
     buildGlowSprites(){ const colors={white:'255,255,255',cyan:'121,255,225',blue:'122,208,255',violet:'168,147,255',pink:'255,122,224',red:'255,107,107',gold:'255,216,138',green:'120,255,220'};
       this.glows={}; for(const k in colors){ const c=document.createElement('canvas'); c.width=c.height=64; const g=c.getContext('2d');
         const gr=g.createRadialGradient(32,32,0,32,32,32); gr.addColorStop(0,`rgba(${colors[k]},0.9)`); gr.addColorStop(.4,`rgba(${colors[k]},0.3)`); gr.addColorStop(1,`rgba(${colors[k]},0)`);
