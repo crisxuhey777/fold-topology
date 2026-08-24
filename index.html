@@ -8,50 +8,51 @@
   :root{ --bg:#05070d; --panel:#0d1220; --line:#2a3550; --neon:#7ad0ff; --gold:#ffd88a; --text:#c6d2e8; --muted:#6d7897; }
   *{ box-sizing:border-box; margin:0; padding:0; }
   html,body{ height:100%; height:100dvh; overflow:hidden; overscroll-behavior:none;
-    background:#05070d; color:var(--text); font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
-    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; padding:10px 12px calc(108px + env(safe-area-inset-bottom));
+    background:linear-gradient(180deg,#0b1a2e 0%,#14203a 45%,#241a3a 100%);
+    color:var(--text); font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
     user-select:none; -webkit-user-select:none; -webkit-tap-highlight-color:transparent; touch-action:manipulation; }
-  .topbar{ position:fixed; top:0; left:0; right:0; z-index:10; display:flex; align-items:center; justify-content:center;
-    padding:calc(10px + env(safe-area-inset-top)) 14px 6px; gap:12px; }
-  .title{ font-size:14px; font-weight:600; letter-spacing:3px; color:#e8f0ff; text-shadow:0 0 18px rgba(122,208,255,.4); }
-  .lvl{ font-size:12px; letter-spacing:2px; color:var(--muted); }
-  .mute{ position:fixed; top:calc(10px + env(safe-area-inset-top)); right:14px; z-index:11; width:40px; height:40px; border-radius:50%;
-    border:1px solid var(--line); background:rgba(13,18,32,.6); color:#d9f2ff; font-size:17px; cursor:pointer; }
-  .stage{ position:relative; width:min(94vw, calc(78vh * 1.3333)); aspect-ratio:4/3; border:1px solid var(--line); border-radius:12px; overflow:hidden; background:#000; line-height:0;
-    box-shadow:0 0 0 1px rgba(0,0,0,.55), 0 28px 70px rgba(0,0,0,.65), 0 0 50px rgba(122,208,255,.06); }
-  canvas{ display:block; width:100%; height:100%; touch-action:none; cursor:crosshair; }
-  button{ appearance:none; border:1px solid var(--neon); background:linear-gradient(180deg, rgba(122,208,255,.12), rgba(122,208,255,.03));
-    color:#d9f2ff; font-size:14px; font-weight:600; letter-spacing:2px; padding:9px 20px; border-radius:999px; cursor:pointer;
-    box-shadow:0 0 18px rgba(122,208,255,.16); transition:transform .12s ease, box-shadow .2s ease; touch-action:manipulation; }
-  button:active{ transform:scale(.96); }
-  #fabFold{ position:fixed; bottom:calc(20px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%);
-    width:78px; height:78px; border-radius:50%; border:2px solid rgba(122,208,255,.6); font-size:21px; font-weight:700; letter-spacing:1px;
-    background:radial-gradient(circle at 35% 30%, rgba(122,208,255,.4), rgba(13,18,32,.92)); backdrop-filter:blur(6px);
-    color:#eaf8ff; box-shadow:0 6px 22px rgba(0,0,0,.5), 0 0 26px rgba(122,208,255,.35); z-index:20; }
-  #fabFold:active{ transform:translateX(-50%) scale(.93); }
-  #restartBtn{ position:fixed; bottom:calc(32px + env(safe-area-inset-bottom)); left:16px; z-index:20; font-size:15px; padding:10px 16px; border-color:var(--line); background:rgba(13,18,32,.7); color:var(--muted); box-shadow:none; }
-  #guideCard{
-    position:fixed; bottom:calc(112px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%) translateY(10px);
+  canvas{ position:fixed; inset:0; width:100vw; height:100vh; display:block; touch-action:none; cursor:crosshair; }
+  .topbar{ position:fixed; top:0; left:0; right:0; z-index:30; display:flex; align-items:center; justify-content:center;
+    padding-top:calc(14px + env(safe-area-inset-top,20px)); pointer-events:none; }
+  .lvl{ font-size:12px; letter-spacing:3px; color:rgba(255,216,138,.85); }
+  .mute{ position:fixed; top:calc(12px + env(safe-area-inset-top,20px)); right:16px; z-index:31; width:36px; height:36px; border-radius:50%;
+    border:1px solid rgba(255,255,255,.25); background:rgba(255,255,255,.1); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+    color:#fff; font-size:16px; cursor:pointer; }
+  .bottombar{ position:fixed; bottom:calc(16px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%);
+    display:flex; align-items:center; gap:14px; padding:10px 16px; border-radius:999px; z-index:30;
+    background:rgba(15,23,42,.55); border:1px solid rgba(122,208,255,.25); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    box-shadow:0 8px 28px rgba(0,0,0,.45); }
+  .btn{ appearance:none; border:none; border-radius:50%; cursor:pointer; color:#d9f2ff; display:flex; align-items:center; justify-content:center;
+    transition:transform .12s ease; touch-action:manipulation; }
+  .btn:active{ transform:scale(.92); }
+  .btn.small{ width:44px; height:44px; font-size:18px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.2); }
+  .btn.fold{ width:66px; height:66px; font-size:17px; font-weight:700; letter-spacing:1px;
+    background:radial-gradient(circle at 35% 30%, rgba(122,208,255,.4), rgba(13,18,32,.9));
+    border:2px solid rgba(255,216,138,.65); color:#fff; box-shadow:0 0 20px rgba(255,216,138,.35), inset 0 0 14px rgba(122,208,255,.15);
+    animation:breath 2.6s ease-in-out infinite; }
+  @keyframes breath{ 0%,100%{ box-shadow:0 0 16px rgba(255,216,138,.25), inset 0 0 14px rgba(122,208,255,.12);} 50%{ box-shadow:0 0 30px rgba(255,216,138,.5), inset 0 0 20px rgba(122,208,255,.22);} }
+  .btn.emit{ background:rgba(122,208,255,.25); border:1px solid rgba(122,208,255,.7); box-shadow:0 0 16px rgba(122,208,255,.4); }
+  #guideCard{ position:fixed; bottom:calc(104px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%) translateY(10px);
     display:flex; align-items:center; gap:8px; padding:10px 18px; border-radius:999px;
-    background:rgba(15,23,42,0.65); border:1px solid rgba(255,216,138,0.32); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
-    color:#e6ecf8; font-size:13px; letter-spacing:1px; box-shadow:0 4px 20px rgba(0,0,0,.4), 0 0 18px rgba(255,216,138,.14);
-    opacity:0; pointer-events:none; transition:opacity .5s ease, transform .5s ease; z-index:21;
-    max-width:min(92vw,500px); white-space:nowrap; overflow:hidden;
-  }
+    background:rgba(15,23,42,.7); border:1px solid rgba(255,216,138,.35); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+    color:#e6ecf8; font-size:13px; letter-spacing:1px; box-shadow:0 4px 20px rgba(0,0,0,.4); opacity:0; pointer-events:none;
+    transition:opacity .5s ease, transform .5s ease; z-index:32; max-width:min(92vw,500px); white-space:nowrap; overflow:hidden; }
   #guideCard.show{ opacity:1; transform:translateX(-50%) translateY(0); pointer-events:auto; }
   #guideCard .ic{ font-size:18px; }
   #guideCard .tt{ color:#ffd88a; font-weight:700; }
   #guideCard .ds{ color:rgba(230,236,248,.85); text-overflow:ellipsis; overflow:hidden; }
-  @media (max-width:640px){ .title{display:none;} }
 </style>
 </head>
 <body>
-  <div class="topbar"><span class="title">折叠时空 · 光影拓扑</span><span class="lvl" id="lvlInd">LEVEL 01 / 24</span></div>
+  <div class="topbar"><span class="lvl" id="lvlInd">— LEVEL 01 / 24 —</span></div>
   <button class="mute" id="muteBtn" title="音乐/音效">♪</button>
-  <div class="stage"><canvas id="game" width="800" height="600"></canvas></div>
+  <canvas id="game"></canvas>
   <div id="guideCard"><span class="ic">💡</span><span class="tt">光源</span><span class="ds">· 点击发射光芒</span></div>
-  <button id="restartBtn">↺ 重玩</button>
-  <button id="fabFold">对折</button>
+  <div class="bottombar">
+    <button class="btn small" id="resetBtn" title="重置">↺</button>
+    <button class="btn fold" id="foldBtn">对折</button>
+    <button class="btn small emit" id="emitBtn" title="发射">💡</button>
+  </div>
 <script>
 (() => {
   'use strict';
@@ -297,7 +298,7 @@
   class Scene {
     constructor(canvas){
       this.canvas=canvas; this.ctx=canvas.getContext('2d');
-      this.dpr=Math.min(window.devicePixelRatio||1,3); canvas.width=800*this.dpr; canvas.height=600*this.dpr; this.ctx.setTransform(this.dpr,0,0,this.dpr,0,0);
+      this.dpr=Math.min(window.devicePixelRatio||1,3); this.scale=1; this.ox=0; this.oy=0;
       this.audio=new AudioEngine(); this.buildGlowSprites();
       this.dust=[]; for(let i=0;i<56;i++)this.dust.push({x:Math.random()*800,y:Math.random()*600,r:.6+Math.random()*1.8,dx:(Math.random()-.5)*6,dy:(Math.random()-.5)*4,ph:Math.random()*6.28,sp:.2+Math.random()*.6,al:.05+Math.random()*.2});
       this.stream=[]; this.trailPool=[]; this.state='PLANNING'; this.time=0;
@@ -307,10 +308,14 @@
       this.selected=null; this.drag=null; this.pitch=0; this.tickAngle=null; this.hoverMirror=null; this.guideDismissed=false;
       this.tutorialDone=false; this.tutorialAlpha=1;
       this.trans=null; this.viewScale=1; this.viewAlpha=1; this.bgT=1;
-      this.fab=document.getElementById('fabFold'); this.muteBtn=document.getElementById('muteBtn'); this.lvlInd=document.getElementById('lvlInd'); this.guideCard=document.getElementById('guideCard');
+      this.fab=document.getElementById('foldBtn'); this.emitBtn=document.getElementById('emitBtn'); this.resetBtn=document.getElementById('resetBtn'); this.muteBtn=document.getElementById('muteBtn'); this.lvlInd=document.getElementById('lvlInd'); this.guideCard=document.getElementById('guideCard');
+      this.resize(); window.addEventListener('resize',()=>this.resize()); window.addEventListener('orientationchange',()=>this.resize());
       this.bindInput(); this.loadLevel(0);
       this.last=performance.now(); requestAnimationFrame(this.loop.bind(this));
     }
+    resize(){ const W=window.innerWidth, H=window.innerHeight;
+      this.canvas.width=Math.floor(W*this.dpr); this.canvas.height=Math.floor(H*this.dpr);
+      this.scale=Math.min(W/800, H/600); this.ox=(W-800*this.scale)/2; this.oy=(H-600*this.scale)/2; }
     buildGlowSprites(){ const colors={white:'255,255,255',cyan:'121,255,225',blue:'122,208,255',violet:'168,147,255',pink:'255,122,224',red:'255,107,107',gold:'255,216,138',green:'120,255,220'};
       this.glows={}; for(const k in colors){ const c=document.createElement('canvas'); c.width=c.height=64; const g=c.getContext('2d');
         const gr=g.createRadialGradient(32,32,0,32,32,32); gr.addColorStop(0,`rgba(${colors[k]},0.9)`); gr.addColorStop(.4,`rgba(${colors[k]},0.3)`); gr.addColorStop(1,`rgba(${colors[k]},0)`);
@@ -319,8 +324,9 @@
 
     bindInput(){
       this.fab.addEventListener('click',()=>this.toggleFold(0));
+      this.emitBtn.addEventListener('click',()=>this.emit());
+      this.resetBtn.addEventListener('click',()=>this.loadLevel(this.levelIndex));
       this.guideCard.addEventListener('click',()=>this.dismissGuide());
-      document.getElementById('restartBtn').addEventListener('click',()=>this.loadLevel(this.levelIndex));
       this.muteBtn.addEventListener('click',()=>{ const m=this.audio.musicOn; this.audio.setMuted(m); this.muteBtn.textContent=m?'✕':'♪'; });
       window.addEventListener('keydown',(e)=>{ if(e.code==='Space'){ e.preventDefault(); this.toggleFold(0); } });
       window.addEventListener('pointerdown',()=>this.audio.unlock(),{once:true});
@@ -331,7 +337,7 @@
       document.addEventListener('gesturestart',e=>e.preventDefault());
       document.addEventListener('dblclick',e=>e.preventDefault());
     }
-    canvasPos(e){ const r=this.canvas.getBoundingClientRect(); return new Vector2D((e.clientX-r.left)*(800/r.width),(e.clientY-r.top)*(600/r.height)); }
+    canvasPos(e){ const r=this.canvas.getBoundingClientRect(); return new Vector2D((e.clientX-r.left-this.ox)/this.scale, (e.clientY-r.top-this.oy)/this.scale); }
 
     loadLevel(i){
       this.levelIndex=i; this.level=LEVELS[i];
@@ -345,7 +351,7 @@
       this.light={ x:this.level.emitter.x, y:this.level.emitter.y, angle:this.level.emitter.angle, movable:null };
       this.axes=[{a:new Vector2D(this.level.foldAxis[0].a.x,this.level.foldAxis[0].a.y),b:new Vector2D(this.level.foldAxis[0].b.x,this.level.foldAxis[0].b.y)},{a:new Vector2D(this.level.foldAxis[1].a.x,this.level.foldAxis[1].a.y),b:new Vector2D(this.level.foldAxis[1].b.x,this.level.foldAxis[1].b.y)}];
       this.folds=[{t:0,target:0,amount:0},{t:0,target:0,amount:0}];
-      this.fab.textContent='对折'; this.lvlInd.textContent=`LEVEL ${String(this.level.id).padStart(2,'0')} / 24`;
+      this.fab.textContent='对折'; this.lvlInd.textContent=`— LEVEL ${String(this.level.id).padStart(2,'0')} / 24 —`;
       this.state='PLANNING'; this.pulses=[]; this.trails=[]; this.sparks=[]; this.rings=[]; this.selected=null; this.drag=null; this.rayResult=null;
       this.tutorialDone=false; this.tutorialAlpha=1; this.tickAngle=null; this.hoverMirror=null; this.guideDismissed=false;
       this.updateGuide();
@@ -465,18 +471,18 @@
 
     /* ---- 交互 ---- */
     onDown(e){ const p=this.canvasPos(e); if(this.state!=='PLANNING'||this.trans)return;
-      for(const id of['a','b']){ if(p.sub(this.axes[0][id]).length()<34){this.drag={kind:'axis',axis:0,id,start:p};this.canvas.setPointerCapture(e.pointerId);return;} }
-      if(p.sub(this.lightPos()).length()<38){ this.drag={kind:'light',start:p,moved:false}; this.canvas.setPointerCapture(e.pointerId); return; }
+      for(const id of['a','b']){ if(p.sub(this.axes[0][id]).length()<44){this.drag={kind:'axis',axis:0,id,start:p};this.canvas.setPointerCapture(e.pointerId);return;} }
+      if(p.sub(this.lightPos()).length()<44){ this.drag={kind:'light',start:p,moved:false}; this.canvas.setPointerCapture(e.pointerId); return; }
       for(let i=0;i<this.objects.length;i++){ const o=this.objects[i]; if(!o.rot&&!o.movable)continue;
         const c=this.foldPos(new Vector2D(o.x,o.y),o.fold); let hit=false;
-        if(o.type==='mirror'){const m=this.foldedMirror(o);hit=this.hitSegment(p,m);} else if(o.type==='prism'||o.type==='crystal')hit=p.sub(c).length()<o.r+16;
+        if(o.type==='mirror'){const m=this.foldedMirror(o);hit=this.hitSegment(p,m);} else if(o.type==='prism'||o.type==='crystal')hit=p.sub(c).length()<o.r+20;
         if(hit){ this.selected=i;
           const isMove = o.movable && o.type==='mirror' && p.sub(c).length()<16;
           this.drag={kind:isMove?'move':'rotate', index:i, startAngle:o.angle}; return; } }
       this.selected=null;
     }
     foldedMirror(o){ const c=this.foldPos(new Vector2D(o.x,o.y),o.fold); const t=this.foldVec(new Vector2D(Math.cos(o.angle*DEG),Math.sin(o.angle*DEG)),o.fold); return {a:c.sub(t.mul(o.half)),b:c.add(t.mul(o.half)),center:c}; }
-    hitSegment(p,m){ const d=p.sub(m.a),e=m.b.sub(m.a),L=e.length(); if(L<1e-6)return false; const t=Math.max(0,Math.min(1,d.dot(e)/L/L)); const prj=m.a.add(e.mul(t)); return p.sub(prj).length()<24; }
+    hitSegment(p,m){ const d=p.sub(m.a),e=m.b.sub(m.a),L=e.length(); if(L<1e-6)return false; const t=Math.max(0,Math.min(1,d.dot(e)/L/L)); const prj=m.a.add(e.mul(t)); return p.sub(prj).length()<40; }
     updateHover(p){
       this.hoverMirror=null;
       if(this.state!=='PLANNING') return;
@@ -493,7 +499,7 @@
         // 以“折叠后的可见方向”对齐鼠标，再反解回纸面角度，保证镜面转向与鼠标一致
         const u=this.unfoldVec(new Vector2D(p.x-c.x,p.y-c.y), o.fold);
         const ang=Math.atan2(u.y,u.x)*180/Math.PI; const na=e.shiftKey?ang:snap15(ang);
-        if(this.tickAngle!=null && na!==this.tickAngle && !e.shiftKey) this.audio.playTick(); this.tickAngle=na; o.angle=na;
+        if(this.tickAngle!=null && na!==this.tickAngle && !e.shiftKey){ this.audio.playTick(); if(navigator.vibrate) navigator.vibrate(8); } this.tickAngle=na; o.angle=na;
         if(this.level.tutorial==='rotate') this.tutorialDone=true; }
       else if(this.drag.kind==='move'){ const o=this.objects[this.drag.index],m=o.movable; if(m.axis==='x')o.x=Math.max(m.min,Math.min(m.max,p.x)); else o.y=Math.max(m.min,Math.min(m.max,p.y)); } }
     onUp(){ if(this.drag&&this.drag.kind==='light'&&!this.drag.moved)this.emit(); this.drag=null; }
@@ -501,30 +507,32 @@
     /* ---- 渲染 ---- */
     render(){
       const c=this.ctx;
-      // 每帧起始：以设备像素完整清屏，杜绝前帧残影累积
+      // 全屏清屏 + 全屏背景（设备像素）
       c.setTransform(1,0,0,1,0,0);
       c.clearRect(0,0,this.canvas.width,this.canvas.height);
-      c.setTransform(this.dpr,0,0,this.dpr,0,0);
-      // 转场缩放
+      this.drawBackground(c);
+      // 视口变换：800×600 游戏区居中缩放
+      c.setTransform(this.dpr*this.scale,0,0,this.dpr*this.scale,this.dpr*this.ox,this.dpr*this.oy);
       if(this.viewScale!==1){ c.translate(400,300); c.scale(this.viewScale,this.viewScale); c.translate(-400,-300); }
       c.globalAlpha=this.viewAlpha;
-      this.drawBackground(c); this.drawDust(c); this.drawAxes(c); this.drawObjects(c);
+      this.drawDust(c); this.drawAxes(c); this.drawObjects(c);
       this.drawStream(c); this.drawTrails(c); this.drawBeam(c); this.drawSparks(c); this.drawRings(c);
       if(this.state==='PLANNING'&&!this.trans) this.drawHandles(c);
+      this.drawEmitter(c);
       c.globalAlpha=1;
-      // 光之子：水晶 → 下一关光源 的贝塞尔流光贯穿
-      if(this.trans && this.trans.phase==='out'){ c.setTransform(this.dpr,0,0,this.dpr,0,0); this.drawSpark(c,this.trans.t/this.trans.dur); }
-      // 主题切换遮罩
-      if(this.trans){ c.setTransform(this.dpr,0,0,this.dpr,0,0); c.globalAlpha=1-this.bgT;
-        c.fillStyle=this.trans.color; c.fillRect(0,0,800,600); c.globalAlpha=1; }
+      // 光之子（游戏坐标内）
+      if(this.trans && this.trans.phase==='out'){ this.drawSpark(c,this.trans.t/this.trans.dur); }
+      // 主题遮罩（全屏）
+      if(this.trans){ c.setTransform(1,0,0,1,0,0); c.globalAlpha=1-this.bgT;
+        c.fillStyle=this.trans.color; c.fillRect(0,0,this.canvas.width,this.canvas.height); c.globalAlpha=1; }
       this.drawHud(c);
     }
     drawBackground(c){
-      const g=c.createLinearGradient(0,0,0,600); g.addColorStop(0,'#0a1122'); g.addColorStop(.5,'#101c30'); g.addColorStop(1,'#0d1a24');
-      c.fillStyle=g; c.fillRect(0,0,800,600);
-      c.fillStyle=hexRGBA(this.level.theme,0.16); c.fillRect(0,0,800,600);
-      this.glow(180,140,240,'blue',0.4); this.glow(660,470,240,'violet',0.35);
-      const v=c.createRadialGradient(400,300,180,400,300,560); v.addColorStop(0,'rgba(0,0,0,0)'); v.addColorStop(1,'rgba(0,0,0,0.5)'); c.fillStyle=v; c.fillRect(0,0,800,600);
+      const W=this.canvas.width, H=this.canvas.height;
+      const g=c.createLinearGradient(0,0,0,H); g.addColorStop(0,'#0b1a2e'); g.addColorStop(.5,'#14203a'); g.addColorStop(1,'#241a3a');
+      c.fillStyle=g; c.fillRect(0,0,W,H);
+      c.fillStyle=hexRGBA(this.level.theme,0.16); c.fillRect(0,0,W,H);
+      const v=c.createRadialGradient(W/2,H/2,H*0.2,W/2,H/2,H*0.8); v.addColorStop(0,'rgba(0,0,0,0)'); v.addColorStop(1,'rgba(0,0,0,0.5)'); c.fillStyle=v; c.fillRect(0,0,W,H);
     }
     drawDust(c){ c.save(); for(const d of this.dust){const tw=.5+.5*Math.sin(this.time*d.sp+d.ph); c.globalAlpha=d.al*(.4+.6*tw); c.globalCompositeOperation='lighter'; c.fillStyle='#cdd8ff'; c.beginPath(); c.arc(d.x,d.y,d.r,0,6.28); c.fill();} c.restore(); }
     drawAxes(c){ const [p1,p2]=this.axisBoundary(this.axes[0]);
@@ -532,9 +540,14 @@
       c.strokeStyle='rgba(255,216,138,0.66)'; c.lineWidth=2; c.setLineDash([10,9]); c.beginPath(); c.moveTo(p1.x,p1.y); c.lineTo(p2.x,p2.y); c.stroke(); c.setLineDash([]); c.restore(); }
     drawObjects(c){ const g=this.geo; if(!g)return; for(const b of g.blackholes)this.drawBlackHole(c,b); for(const w of g.wormholes)this.drawWormhole(c,w); for(const m of g.mirrors)this.drawMirror(c,m); for(const p of g.prisms)this.drawPrism(c,p); for(const d of g.dyes)this.drawDye(c,d); for(const cr of g.crystals)this.drawCrystal(c,cr); }
 
-    drawBlackHole(c,b){ this.glow(b.center.x,b.center.y,b.radius*2.2,'violet',0.5);
-      c.fillStyle='#000'; c.beginPath(); c.arc(b.center.x,b.center.y,b.radius,0,6.28); c.fill();
-      c.strokeStyle='rgba(140,120,220,0.5)'; c.lineWidth=2; c.beginPath(); c.arc(b.center.x,b.center.y,b.radius+6,0,6.28); c.stroke(); }
+    drawBlackHole(c,b){ this.glow(b.center.x,b.center.y,b.radius*2.4,'violet',0.5);
+      // 旋转吸积盘光环
+      c.save(); c.translate(b.center.x,b.center.y); c.rotate(this.time*0.6);
+      const g=c.createRadialGradient(0,0,b.radius,0,0,b.radius+12);
+      g.addColorStop(0,'rgba(140,120,220,0)'); g.addColorStop(0.55,'rgba(150,130,230,0.32)'); g.addColorStop(1,'rgba(140,120,220,0)');
+      c.fillStyle=g; c.beginPath(); c.arc(0,0,b.radius+12,0,6.28); c.fill();
+      c.strokeStyle='rgba(180,150,255,0.4)'; c.lineWidth=1.5; c.setLineDash([6,5]); c.beginPath(); c.arc(0,0,b.radius+7,0,6.28); c.stroke(); c.setLineDash([]); c.restore();
+      c.fillStyle='#000'; c.beginPath(); c.arc(b.center.x,b.center.y,b.radius,0,6.28); c.fill(); }
 
     /* 反射镜：正面发光晶体镜面 + 背面哑光基座(斜纹) + 旋转手柄 */
     drawMirror(c,m){
@@ -625,11 +638,12 @@
         c.strokeStyle='rgba(122,208,255,0.55)'; c.lineWidth=1.5; c.beginPath(); c.arc(cc.x,cc.y,R,0,6.28); c.stroke();
         const tv=this.foldVec(new Vector2D(Math.cos(o.angle*DEG),Math.sin(o.angle*DEG)),o.fold); const a=Math.atan2(tv.y,tv.x);
         c.strokeStyle='#ffd88a'; c.lineWidth=2.5; c.beginPath(); c.moveTo(cc.x,cc.y); c.lineTo(cc.x+Math.cos(a)*R,cc.y+Math.sin(a)*R); c.stroke();
-        c.fillStyle='#ffd88a'; c.beginPath(); c.arc(cc.x+Math.cos(a)*R,cc.y+Math.sin(a)*R,4.5,0,6.28); c.fill(); }
+        c.fillStyle='#ffd88a'; c.beginPath(); c.arc(cc.x+Math.cos(a)*R,cc.y+Math.sin(a)*R,4.5,0,6.28); c.fill();
+        c.font='12px "Microsoft YaHei",sans-serif'; c.fillStyle='rgba(255,216,138,0.95)'; c.textAlign='center'; c.textBaseline='middle';
+        c.fillText(Math.round(o.angle)+'°', cc.x, cc.y-R-12); }
       for(const id of['a','b']){ const p=this.axes[0][id]; c.save(); c.translate(p.x,p.y);
         c.fillStyle='#0e1424'; c.strokeStyle='#ffd88a'; c.lineWidth=2; c.beginPath(); c.arc(0,0,7,0,6.28); c.fill(); c.stroke();
         c.strokeStyle='#ffd88a'; c.beginPath(); c.arc(0,0,11,Math.PI*0.1,Math.PI*1.4); c.stroke(); c.restore(); }
-      this.drawEmitter(c);
     }
     /* 发射光源：金色底座灯塔 + 聚光口 + 定向粒子 */
     drawEmitter(c){ const p=this.lightPos(), d=this.lightDir(), ang=Math.atan2(d.y,d.x), pulse=0.7+0.3*Math.sin(this.time*2.4);
@@ -653,19 +667,22 @@
           c.save(); c.translate(x,y); c.rotate(ang); c.fillStyle=`rgba(190,255,238,${a.toFixed(3)})`;
           c.beginPath(); c.moveTo(0,-4.5); c.lineTo(6,0); c.lineTo(0,4.5); c.closePath(); c.fill(); c.restore(); } } }
     drawHud(c){
+      c.setTransform(1,0,0,1,0,0);
+      const S=this.scale*this.dpr, cx=this.canvas.width/2, H=this.canvas.height;
+      const sx=p=>p.x*S+this.ox*this.dpr, sy=p=>p.y*S+this.oy*this.dpr;
       if(this.level.tutorial&&!this.tutorialDone&&this.state==='PLANNING'){
         const a=0.5+0.5*Math.sin(this.time*3)*this.tutorialAlpha;
         c.save(); c.textAlign='center'; c.font='600 16px "Microsoft YaHei",sans-serif'; c.fillStyle=`rgba(230,240,255,${(0.85*a).toFixed(3)})`;
         const hints={emit:'点击光源发射',fold:'折叠纸张，连通时空',rotate:'拖动圆环旋转镜面'};
-        c.fillText(hints[this.level.tutorial],400,560);
-        if(this.level.tutorial==='emit'){ const lp=this.lightPos(); this.glow(lp.x,lp.y-46,16+4*Math.sin(this.time*4),'gold',0.5*a); }
+        c.fillText(hints[this.level.tutorial],cx,H-160);
+        if(this.level.tutorial==='emit'){ const lp=this.lightPos(); this.glow(sx(lp),sy(lp)-46*S,(16+4*Math.sin(this.time*4))*S,'gold',0.5*a); }
         c.restore();
       }
       c.save(); c.textAlign='center'; c.font='13px "Microsoft YaHei",sans-serif';
       let msg; if(this.state==='PLANNING')msg=''; else if(this.state==='EMITTING')msg='光束行进中…';
       else msg=this.rayResult&&this.rayResult.solved?'✦ 光路贯通 ✦':'光路中断，继续调整';
       c.fillStyle=this.state==='RESOLVED'&&this.rayResult&&this.rayResult.solved?'rgba(255,190,240,0.9)':'rgba(150,160,200,0.6)';
-      if(msg)c.fillText(msg,400,580); c.restore();
+      if(msg)c.fillText(msg,cx,H-128); c.restore();
     }
 
     loop(now){ const dt=Math.min(0.05,(now-this.last)/1000); this.last=now; this.update(dt); this.render(); requestAnimationFrame(this.loop.bind(this)); }
